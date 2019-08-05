@@ -37,31 +37,31 @@ func (v *View) Next() *View {
 func (v *View) Value() interface{} { return v.value }
 
 // A Subject controls broadcasting events to multiple viewers.
-// The zero value for a Subject is a nil valued View.
 type Subject struct {
 	mu   sync.Mutex
 	cond *sync.Cond
-	view *View
+	view unsafe.Pointer
 }
 
-func (s *Subject) setWithLock(val interface{}) *View {
-	v := &View{value: val, sub: s}
-	if s.cond == nil {
-		s.cond = sync.NewCond(&s.mu)
-	}
-	if s.view != nil {
-		atomic.StorePointer(&s.view.next, unsafe.Pointer(v))
-	}
-	s.view = v
-	return v
+func (s *Subject) load() *View {
+	return (*View)(atomic.LoadPointer(&s.view))
 }
 
 // View returns the latest value for the subject.
+// Blocks if Set has not been called.
 func (s *Subject) View() *View {
+	v := s.load()
+	if v != nil {
+		return v
+	}
+
+	// Slow-path.
 	s.mu.Lock()
-	v := s.view
-	if v == nil {
-		v = s.setWithLock(nil)
+	if s.cond == nil {
+		s.cond = sync.NewCond(&s.mu)
+	}
+	for v = s.load(); v == nil; v = s.load() {
+		s.cond.Wait()
 	}
 	s.mu.Unlock()
 	return v
@@ -69,9 +69,29 @@ func (s *Subject) View() *View {
 
 // Set the latest view to val and notify waiting viewers.
 func (s *Subject) Set(val interface{}) *View {
+	v := &View{value: val, sub: s}
+	vOld := s.load()
+	if vOld == nil {
+		s.mu.Lock()
+		if s.cond == nil {
+			s.cond = sync.NewCond(&s.mu)
+		}
+		if vOld = s.load(); vOld == nil {
+			atomic.StorePointer(&s.view, unsafe.Pointer(v))
+			s.cond.Broadcast()
+			s.mu.Unlock()
+			return v
+		}
+		s.mu.Unlock()
+	}
+
+	for !atomic.CompareAndSwapPointer(&s.view, unsafe.Pointer(vOld), unsafe.Pointer(v)) {
+		vOld = s.load()
+	}
+	atomic.StorePointer(&vOld.next, unsafe.Pointer(v))
+
 	s.mu.Lock()
-	v := s.setWithLock(val)
-	s.mu.Unlock()
 	s.cond.Broadcast()
+	s.mu.Unlock()
 	return v
 }

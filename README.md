@@ -2,14 +2,18 @@
 
 [![GoDoc](https://godoc.org/github.com/afking/observer?status.svg)](https://godoc.org/github.com/afking/observer)
 
-Broadcast events to multiple viewers for Go. Replaces a list of channels.
+Experimental package to broadcast events to multiple viewers for Go.
+Replaces a list of channels.
 
 ```
 s := &observer.Subject{}
-s.Set("hello")
-for v := s.View(); ; v = v.Next() {
-	fmt.Println(v.Value())
-}
+go s.Set("hello")
+
+go func() {
+	for v := s.View(); ; v = v.Next() {
+		fmt.Println(v.Value())
+	}
+}()
 ```
 
 ```
