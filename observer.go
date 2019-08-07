@@ -39,7 +39,7 @@ func (v *View) Value() interface{} { return v.value }
 // A Subject controls broadcasting events to multiple viewers.
 type Subject struct {
 	mu   sync.Mutex
-	cond *sync.Cond
+	cond sync.Cond
 	view unsafe.Pointer
 }
 
@@ -57,8 +57,8 @@ func (s *Subject) View() *View {
 
 	// Slow-path.
 	s.mu.Lock()
-	if s.cond == nil {
-		s.cond = sync.NewCond(&s.mu)
+	if s.cond.L == nil {
+		s.cond.L = &s.mu
 	}
 	for v = s.load(); v == nil; v = s.load() {
 		s.cond.Wait()
@@ -73,8 +73,8 @@ func (s *Subject) Set(val interface{}) *View {
 	vOld := s.load()
 	if vOld == nil {
 		s.mu.Lock()
-		if s.cond == nil {
-			s.cond = sync.NewCond(&s.mu)
+		if s.cond.L == nil {
+			s.cond.L = &s.mu
 		}
 		if vOld = s.load(); vOld == nil {
 			atomic.StorePointer(&s.view, unsafe.Pointer(v))
