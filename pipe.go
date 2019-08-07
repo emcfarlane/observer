@@ -26,13 +26,12 @@ type pipe struct {
 
 func (p *pipe) copy(b []byte, state pipeState) (n int, err error) {
 	p.mu.Lock()
+	for p.state == state {
+		p.cond.Wait() // Queue of same types.
+	}
 	if p.err != nil {
 		p.mu.Unlock()
 		return 0, p.err
-	}
-
-	for p.state == state {
-		p.cond.Wait() // Queue of same types.
 	}
 
 	if p.state == pipeOpen {
@@ -65,6 +64,7 @@ func (p *pipe) close(err error) error {
 	if p.err == nil {
 		p.n, p.err = 0, err
 	}
+	p.cond.Broadcast()
 	if p.state != pipeOpen {
 		p.rwMu.Unlock()
 		return p.err
