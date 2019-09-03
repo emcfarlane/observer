@@ -13,20 +13,21 @@ type View struct {
 	next  unsafe.Pointer
 }
 
-func (v *View) load() *View {
+// Load returns the next view or nil if no value is present.
+func (v *View) Load() *View {
 	return (*View)(atomic.LoadPointer(&v.next))
 }
 
 // Next returns the next view or blocks until a new value is set.
 func (v *View) Next() *View {
-	next := v.load()
+	next := v.Load()
 	if next != nil {
 		return next
 	}
 
 	// Slow-path.
 	v.sub.mu.Lock()
-	for next = v.load(); next == nil; next = v.load() {
+	for next = v.Load(); next == nil; next = v.Load() {
 		v.sub.cond.Wait()
 	}
 	v.sub.mu.Unlock()
