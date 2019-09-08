@@ -10,7 +10,7 @@ func TestObserver(t *testing.T) {
 	var s Subject
 	v := s.Set(1)
 
-	if v.Value().(int) != 1 {
+	if v.Value.(int) != 1 {
 		t.Fatal("required", 1)
 	}
 
@@ -25,7 +25,7 @@ func TestObserver(t *testing.T) {
 		i := i
 		wg.Add(1)
 		go func() {
-			threes[i] = v2.Next().Value().(int)
+			threes[i] = v2.Next().Value.(int)
 			wg.Done()
 		}()
 	}
@@ -54,7 +54,7 @@ func BenchmarkObserver(b *testing.B) {
 					var sum int
 					for sum < b.N {
 						v = v.Next()
-						sum += v.Value().(int)
+						sum += v.Value.(int)
 					}
 					wg.Done()
 				}()
