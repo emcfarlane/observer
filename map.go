@@ -1,5 +1,6 @@
 package observer
 
+/*
 import (
 	"runtime"
 	"sync"
@@ -10,16 +11,6 @@ import (
 type store struct {
 	m map[interface{}]interface{}
 	v *View
-}
-
-func (s *store) set(v *View) {
-	e := v.Value.(entry)
-	if e.del {
-		delete(s.m, e.key)
-	} else {
-		s.m[e.key] = e.val
-	}
-	s.v = v
 }
 
 type entry struct {
@@ -39,6 +30,9 @@ type Map struct {
 
 	writeN *int32
 	write  *store
+
+	view  *View
+	count int
 }
 
 func (m *Map) n() int32 {
@@ -54,6 +48,13 @@ func (m *Map) run() {
 		}
 
 		// Replay entries
+		if wv := m.write.v; wv != nil {
+			wv.Range(func(val interface{}) bool {
+				//return v != wv
+				return false
+			})
+
+		}
 		for wv := m.write.v; wv != nil && v != wv; wv = wv.Load() {
 			m.write.set(v)
 		}
@@ -78,6 +79,30 @@ func (m *Map) run() {
 	}
 }
 
+func (m *Map) tryCommit() {
+	if !atomic.CompareAndSwapInt32(m.writeN, 0, -1) {
+		return // busy
+	}
+
+	if m.count != 0 {
+		var i int
+		m.write.v = m.write.v.Range(func(val interface{}) bool {
+			if e := v.Value.(entry); e.del {
+				delete(s.m, e.key)
+			} else {
+				s.m[e.key] = e.val
+			}
+
+			i++
+			return i < m.count
+		})
+	}
+
+	m.count = 0
+	m.write.v
+
+}
+
 func (m *Map) init() {
 	m.once.Do(func() {
 		m.cond.L = &m.mu
@@ -100,13 +125,14 @@ func (m *Map) init() {
 }
 
 func searchView(v *View, key interface{}) (val interface{}, ok, deleted bool) {
-	for ; v != nil; v = v.Load() {
-		e := v.Value.(entry)
+	v.Range(func(val interface{}) bool {
+		e := val.(entry)
 		if e.key == key {
 			// Last write wins
 			val, ok, deleted = e.val, !e.del, e.del
 		}
-	}
+		return true
+	})
 	return
 }
 
@@ -156,4 +182,4 @@ func (m *Map) set(key, val interface{}, del bool) {
 
 func (m *Map) Set(key, val interface{}) { m.set(key, val, false) }
 
-func (m *Map) Del(key interface{}) { m.set(key, nil, true) }
+func (m *Map) Del(key interface{}) { m.set(key, nil, true) }*/

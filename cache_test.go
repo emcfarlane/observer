@@ -18,6 +18,7 @@
 
 package observer
 
+/*
 import (
 	"errors"
 	"fmt"
@@ -199,10 +200,10 @@ func BenchmarkCaches(b *testing.B) {
 		{"SyncMapOneKeyRead", newSyncMap(), oneList, 0},
 
 		//{"BigCacheZipfWrite", newBigCache(b.N), zipfList, 100},
-		/*{"SyncMapZipfWrite", newSyncMap(), zipfList, 100},
+		//{"SyncMapZipfWrite", newSyncMap(), zipfList, 100},
 
 		//{"BigCacheOneKeyWrite", newBigCache(b.N), oneList, 100},
-		{"SyncMapOneKeyWrite", newSyncMap(), oneList, 100},*/
+		//{"SyncMapOneKeyWrite", newSyncMap(), oneList, 100},
 
 		//{"BigCacheZipfMixed", newBigCache(b.N), zipfList, 25},
 		{"MapZipfMixed", newMap(), zipfList, 25},
@@ -218,4 +219,4 @@ func BenchmarkCaches(b *testing.B) {
 			runCacheBenchmark(b, bm.cache, bm.keys, bm.pctWrites)
 		})
 	}
-}
+}*/

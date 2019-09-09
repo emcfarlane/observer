@@ -37,6 +37,27 @@ func TestObserver(t *testing.T) {
 			t.Fatalf("threes[%d] == %d, want 3", i, three)
 		}
 	}
+
+	for i := 4; i < 66; i++ {
+		s.Set(i)
+	}
+
+	v65 := s.View()
+	if v65.Value.(int) != 65 {
+		t.Fatal("required", 65)
+	}
+	//t.Logf("%+v", v.frame)
+	//t.Logf("%+v", v65.frame)
+
+	var i int
+	v.Range(func(val interface{}) bool {
+		i++
+		if i != val.(int) {
+			t.Fatalf("range %d, failed %v", i, v)
+			return false
+		}
+		return i < 66
+	})
 }
 
 var cases = []int{1, 8, 32}
