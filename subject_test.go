@@ -50,7 +50,7 @@ func TestObserver(t *testing.T) {
 	//t.Logf("%+v", v65.frame)
 
 	var i int
-	v.Range(func(val interface{}) bool {
+	v65r := v.Range(func(val interface{}) bool {
 		i++
 		if i != val.(int) {
 			t.Fatalf("range %d, failed %v", i, v)
@@ -58,6 +58,9 @@ func TestObserver(t *testing.T) {
 		}
 		return i < 66
 	})
+	if v65 != v65r {
+		t.Fatalf("%p %v != %p %v", v65, v65, v65r, v65r)
+	}
 }
 
 var cases = []int{1, 8, 32}
