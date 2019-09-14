@@ -15,6 +15,7 @@ type View struct {
 }
 
 func (v *View) frame() *frame {
+	// TODO: justify this...
 	return (*frame)(unsafe.Pointer(
 		uintptr(unsafe.Pointer(v)) - uintptr(v.index)*unsafe.Sizeof(*v)),
 	)

@@ -1,185 +1,174 @@
 package observer
 
-/*
 import (
-	"runtime"
+	"fmt"
 	"sync"
 	"sync/atomic"
-	"unsafe"
 )
-
-type store struct {
-	m map[interface{}]interface{}
-	v *View
-}
 
 type entry struct {
 	key, val interface{} // []byte
 	del      bool
 }
 
+const (
+	flagAorB uint64 = 1 << 63
+	flagBusy uint64 = 1 << 62
+)
+
+type store struct {
+	values map[interface{}]interface{}
+	count  uint64
+	view   *View
+}
+
 type Map struct {
-	readN unsafe.Pointer // *int32
-	read  unsafe.Pointer // *store
-
 	once   sync.Once
-	mu     sync.Mutex
-	cond   sync.Cond // backpressure
 	queue  Subject
-	length int32
+	state  uint64
+	a, b   store
+	want   uint64
+	writes int
 
-	writeN *int32
-	write  *store
-
-	view  *View
-	count int
+	///lock uintptr
+	//writeN unsafe.Pointer // *int32
+	//writeN *int32
+	//write  *store
+	//ktotal int
 }
 
-func (m *Map) n() int32 {
-	return atomic.LoadInt32(m.writeN)
+func (m *Map) String() string {
+	return fmt.Sprintf("c = %64b\nA = %64b %v\nB = %64b %v\nw = %64b", m.state, m.a.count, len(m.a.values), m.b.count, len(m.b.values), m.want)
 }
 
-func (m *Map) run() {
-	for i, v := int32(0), m.queue.View(); ; i, v = 0, v.Next() {
-
-		// Wait for writeN to go to zero
-		for n := m.n(); n != 0; n = m.n() {
-			runtime.Gosched() // TODO: sync.Cond schedule?
-		}
-
-		// Replay entries
-		if wv := m.write.v; wv != nil {
-			wv.Range(func(val interface{}) bool {
-				//return v != wv
-				return false
-			})
-
-		}
-		for wv := m.write.v; wv != nil && v != wv; wv = wv.Load() {
-			m.write.set(v)
-		}
-
-		// Write new
-		for ; v != nil && i < 128; v = v.Load() {
-			m.write.set(v)
-			i++
-		}
-		v = m.write.v // rewind to last...
-
-		// Swap
-		m.writeN = (*int32)(atomic.SwapPointer(&m.readN, unsafe.Pointer(m.writeN)))
-		m.write = (*store)(atomic.SwapPointer(&m.read, unsafe.Pointer(m.write)))
-
-		// Throttle
-		if n := atomic.AddInt32(&m.length, -i); n < 128 {
-			m.mu.Lock()
-			m.cond.Broadcast()
-			m.mu.Unlock()
-		}
+func (m *Map) aOrB(i uint64) (*store, uint64) {
+	if i >= flagAorB {
+		fmt.Println(i, "--------- A")
+		return &m.a, flagAorB
 	}
+	fmt.Println(i, "--------- B")
+	return &m.b, 0
 }
+
+//atomic.AddUint64(&m.want, flagBusy)
+//fmt.Printf("busy %64b\n", uint64(1<<60))
+//fmt.Printf("busy %64b\n", ^uint64((1<<60)-1))
+//fmt.Println(uint64(uint64(1<<60) - ^uint64((1<<60)-1)))
+//fmt.Println("writing", val)
+
+//count := atomic.LoadUint64(&m.count)
+//s, other := m.aOrB(count ^ flagAorB)
+//sCount := atomic.LoadUint64(&s.count)
+
+//if !atomic.CompareAndSwapUint64(&m.want, sCount+other, flagAorB) {
+//	return // busy
+//}
 
 func (m *Map) tryCommit() {
-	if !atomic.CompareAndSwapInt32(m.writeN, 0, -1) {
+	// ---------------
+	//fmt.Println(m)
+
+	want := atomic.LoadUint64(&m.want) // 1000001
+	wantClean := want & ^flagAorB
+	//fmt.Println("wantClean", wantClean)
+	fmt.Println("TRY\n" + m.String())
+
+	fmt.Printf("WRITE ")
+	x, other := m.aOrB(want ^ flagAorB)
+	if !atomic.CompareAndSwapUint64(&x.count, wantClean, flagAorB) {
 		return // busy
 	}
+	fmt.Println("LOCKED", wantClean, "\n"+m.String())
 
-	if m.count != 0 {
-		var i int
-		m.write.v = m.write.v.Range(func(val interface{}) bool {
-			if e := v.Value.(entry); e.del {
-				delete(s.m, e.key)
+	// ---------------
+	//fmt.Println(m)
+
+	var i int
+	x.view = x.view.Range(func(val interface{}) bool {
+		if i != 0 { // Ignore sentinel.
+			if e := val.(entry); e.del {
+				delete(x.values, e.key)
 			} else {
-				s.m[e.key] = e.val
+				//fmt.Println("set", e.key, e.val)
+				x.values[e.key] = e.val
 			}
+		}
+		i++
+		return i < (64 + m.writes)
+	})
+	m.writes = i
 
-			i++
-			return i < m.count
-		})
-	}
+	y, _ := m.aOrB(want)
 
-	m.count = 0
-	m.write.v
+	count := atomic.AddUint64(&m.state, ^(want + other - 1))
+	//atomic.AddUint64(&x.count, ^(flagAorB - 1))
+	fmt.Println("STATE\n" + m.String())
 
+	atomic.StoreUint64(&m.want, count)
+	fmt.Println("WANT\n" + m.String())
+
+	// Relase other map counter.
+	atomic.AddUint64(&y.count, ^(flagAorB - 1))
+	fmt.Println("RELEASE\n" + m.String())
 }
 
 func (m *Map) init() {
 	m.once.Do(func() {
-		m.cond.L = &m.mu
-
 		m.queue.deadlock = true
 		v := m.queue.Set(entry{}) // sentinel
 
-		var wN, rN int32
-
-		wS := store{m: make(map[interface{}]interface{}), v: v}
-		m.write = &wS
-		m.writeN = &wN
-
-		rS := store{m: make(map[interface{}]interface{}), v: v}
-		atomic.SwapPointer(&m.read, unsafe.Pointer(&rS))
-		atomic.SwapPointer(&m.readN, unsafe.Pointer(&rN))
-
-		go m.run()
+		m.a.values = make(map[interface{}]interface{})
+		m.a.view = v
+		m.b.values = make(map[interface{}]interface{})
+		m.b.view = v
+		m.b.count = flagAorB
 	})
 }
 
-func searchView(v *View, key interface{}) (val interface{}, ok, deleted bool) {
+func searchView(v *View, key interface{}) (value interface{}, ok, del bool) {
+	var i int
 	v.Range(func(val interface{}) bool {
-		e := val.(entry)
-		if e.key == key {
-			// Last write wins
-			val, ok, deleted = e.val, !e.del, e.del
+		if i != 0 {
+			// Last write wins.
+			if e := val.(entry); e.key == key {
+				value, ok, del = e.val, !e.del, e.del
+			}
 		}
+		i++
 		return true
 	})
 	return
 }
 
-func (m *Map) throttle() {
-	m.mu.Lock()
-	for {
-		if n := atomic.LoadInt32(&m.length); n <= 128 {
-			break
-		}
-		m.cond.Wait()
-	}
-	m.mu.Unlock()
-}
-
 func (m *Map) Get(key interface{}) (interface{}, bool) {
-	if n := atomic.LoadInt32(&m.length); n > 128 {
-		m.throttle()
-	}
+	m.init()
+	m.tryCommit()
 
-	counter := (*int32)(atomic.LoadPointer(&m.readN))
-	if counter == nil {
-		return nil, false // init
-	}
-	atomic.AddInt32(counter, 1)
+	// Increment the state
+	c := atomic.AddUint64(&m.state, 1)
+	fmt.Printf("READ ")
+	s, _ := m.aOrB(c)
 
-	s := (*store)(atomic.LoadPointer(&m.read))
-
-	// Search queue first, have to check
-	val, ok, deleted := searchView(s.v, key)
+	// Search queue first, have to check.
+	val, ok, deleted := searchView(s.view, key)
 	if !ok && !deleted {
-		val, ok = s.m[key]
+		val, ok = s.values[key]
 	}
 
-	atomic.AddInt32(counter, -1)
+	atomic.AddUint64(&s.count, 1)
 	return val, ok
 }
 
 func (m *Map) set(key, val interface{}, del bool) {
 	m.init()
-	if n := atomic.AddInt32(&m.length, 1); n > 128 {
-		m.throttle()
-	}
-
-	e := entry{key: key, val: val, del: del}
-	m.queue.Set(e)
+	m.queue.Set(entry{key: key, val: val, del: del})
+	m.tryCommit()
 }
 
-func (m *Map) Set(key, val interface{}) { m.set(key, val, false) }
+func (m *Map) Set(key, val interface{}) {
+	m.set(key, val, false)
+}
 
-func (m *Map) Del(key interface{}) { m.set(key, nil, true) }*/
+func (m *Map) Del(key interface{}) {
+	m.set(key, nil, true)
+}
