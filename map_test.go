@@ -21,7 +21,6 @@ func TestMap(t *testing.T) {
 	if got.(string) != val {
 		t.Fatalf("expected %s, got %s", val, got)
 	}
-	t.Fatal()
 
 	val2 := "map"
 	m.Set(key, val2)
@@ -42,8 +41,9 @@ func TestMap(t *testing.T) {
 		t.Fatalf("shouldn't be ok")
 	}
 
+	//t.Fatal()
 	wg := sync.WaitGroup{}
-	for i := 0; i < 10000; i++ {
+	for i := 0; i < 100; i++ {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
