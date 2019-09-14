@@ -15,7 +15,9 @@ type View struct {
 }
 
 func (v *View) frame() *frame {
-	return (*frame)(unsafe.Pointer(uintptr(unsafe.Pointer(v)) - uintptr(v.index)*unsafe.Sizeof(*v)))
+	return (*frame)(unsafe.Pointer(
+		uintptr(unsafe.Pointer(v)) - uintptr(v.index)*unsafe.Sizeof(*v)),
+	)
 }
 
 // Next returns the next view or blocks until a new value is set.
@@ -23,53 +25,59 @@ func (v *View) Next() *View {
 	i := v.index + 1
 	f := v.frame()
 
-	if i != 64 && f.has(i) {
-		return &f.views[i]
-	}
-
-	// Slow-path.
-	f.sub.mu.Lock()
-	if i == 64 {
-		// Wait for the next frame
-		for next := f.load(); next == nil; next = f.load() {
-			f.sub.cond.Wait()
+	if i != 64 {
+		if f.has(i) {
+			return &f.views[i]
 		}
-		i = 0
-	} else {
-		// Wait for the next view
+
+		// Wait for the next view.
+		f.sub.mu.Lock()
 		for !f.has(i) {
 			f.sub.cond.Wait()
 		}
+		f.sub.mu.Unlock()
+		return &f.views[i]
+	}
+
+	if next := f.load(); next != nil {
+		return &next.views[0]
+	}
+
+	// Wait for the next frame.
+	f.sub.mu.Lock()
+	var next *frame
+	for next = f.load(); next == nil; next = f.load() {
+		f.sub.cond.Wait()
 	}
 	f.sub.mu.Unlock()
-	return &f.views[i]
+	return &next.views[0]
 }
 
 func (v *View) Range(fn func(val interface{}) bool) *View {
 	f := v.frame()
-	for {
-		vNext := f.latest()
-		i, j := v.index, vNext.index
+	for i, j := v.index, f.last(); ; i, j = 0, f.last() {
+		var next *frame
+		if j == 63 {
+			next = f.load()
+		}
+
+		// Ensure all values are set until latest.
+		want := ^uint64(0) >> (63 - j)
+		for atomic.LoadUint64(&f.mask)&want != want {
+			// Spin lock.
+			runtime.Gosched()
+		}
 
 		for ; i <= j; i++ {
-			for !f.has(i) {
-				runtime.Gosched()
-			}
-
 			if !fn(f.views[i].Value) {
 				return &f.views[i]
 			}
 		}
 
-		if j != 63 {
+		if next == nil {
 			return &f.views[j]
 		}
-
-		fNew := f.load()
-		if fNew == nil {
-			return &f.views[j]
-		}
-		f = fNew
+		f = next
 	}
 }
 
@@ -89,6 +97,10 @@ func (f *frame) has(i uint8) bool {
 	return atomic.LoadUint64(&f.mask)&(1<<i) != 0
 }
 
+func (f *frame) last() uint8 {
+	return uint8(bits.Len64(atomic.LoadUint64(&f.mask)) - 1)
+}
+
 func (f *frame) set(i uint8, val interface{}) *View {
 	f.views[i].Value = val
 	f.views[i].index = i
@@ -97,14 +109,13 @@ func (f *frame) set(i uint8, val interface{}) *View {
 }
 
 func (f *frame) latest() *View {
-	i := bits.Len64(atomic.LoadUint64(&f.mask)) - 1
-	return &f.views[i]
+	return &f.views[f.last()]
 }
 
 // A Subject controls broadcasting events to multiple viewers.
 type Subject struct {
 	mu    sync.Mutex
-	cond  sync.Cond // TODO: split mask/frame cond?
+	cond  sync.Cond
 	frame unsafe.Pointer
 
 	deadlock bool
@@ -156,19 +167,19 @@ func (s *Subject) Set(val interface{}) (v *View) {
 
 	i := atomic.AddUint32(&f.count, 1)
 	for ; i > 64; i = atomic.AddUint32(&f.count, 1) {
-		// Spin lock
-		fNew := f.load()
-		for ; fNew == nil; fNew = f.load() {
+		// Spin lock.
+		next := f.load()
+		for ; next == nil; next = f.load() {
 			runtime.Gosched()
 		}
-		f = fNew
+		f = next
 	}
 
 	if i == 64 {
-		fNew := &frame{sub: s}
-		v = fNew.set(0, val)
-		atomic.StorePointer(&f.next, unsafe.Pointer(fNew))
-		atomic.StorePointer(&s.frame, unsafe.Pointer(fNew))
+		next := &frame{sub: s}
+		v = next.set(0, val)
+		atomic.StorePointer(&f.next, unsafe.Pointer(next))
+		atomic.StorePointer(&s.frame, unsafe.Pointer(next))
 	} else {
 		v = f.set(uint8(i), val)
 	}
