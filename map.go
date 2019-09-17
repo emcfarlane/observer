@@ -2,6 +2,7 @@ package observer
 
 import (
 	"fmt"
+	"runtime"
 	"sync"
 	"sync/atomic"
 )
@@ -23,7 +24,7 @@ type Map struct {
 	once    sync.Once
 	queue   Subject
 	state   uint64
-	a, b    *store
+	a, b    store
 	pending uint64
 
 	lock   uint32
@@ -37,9 +38,9 @@ func (m *Map) String() string {
 
 func (m *Map) aOrB(i uint64) *store {
 	if i >= flagAorB {
-		return m.a
+		return &m.a
 	}
-	return m.b
+	return &m.b
 }
 
 func (m *Map) commit() {
@@ -50,6 +51,15 @@ func (m *Map) commit() {
 
 	if m.want != count {
 		return // waiting
+	}
+
+	if x.values == nil {
+		x.values = make(map[interface{}]interface{})
+	}
+	if x.view == nil {
+		x.view = m.queue.Set(entry{}) // sentinel
+		y := m.aOrB(state)
+		y.view = x.view
 	}
 
 	var i int
@@ -69,17 +79,25 @@ func (m *Map) commit() {
 
 	newState := atomic.AddUint64(&m.state, flagAorB+^(m.want-1))
 	m.want = newState &^ flagAorB
+	//fmt.Println("STATE\n" + m.String())
 }
 
 func (m *Map) tryCommit() {
-	if !atomic.CompareAndSwapUint32(&m.lock, 0, 1) {
-		return // busy
+	for i := atomic.AddUint32(&m.lock, 1); i != 1; i = atomic.AddUint32(&m.lock, 1) {
+		if i <= 64 {
+			return
+		}
+		//fmt.Println("throttle")
+		runtime.Gosched() // throttle
 	}
+	/*if !atomic.CompareAndSwapUint32(&m.lock, 0, 1) {
+		return // busy
+	}*/
 	m.commit()
 	atomic.StoreUint32(&m.lock, 0)
 }
 
-func (m *Map) init() {
+/*func (m *Map) init() {
 	m.once.Do(func() {
 		m.queue.deadlock = true
 		v := m.queue.Set(entry{}) // sentinel
@@ -93,7 +111,7 @@ func (m *Map) init() {
 			view:   v,
 		}
 	})
-}
+}*/
 
 func searchView(v *View, key interface{}) (value interface{}, ok, del bool) {
 	var i int
@@ -110,29 +128,33 @@ func searchView(v *View, key interface{}) (value interface{}, ok, del bool) {
 	return
 }
 
-func (m *Map) Get(key interface{}) (interface{}, bool) {
-	m.init()
-	m.tryCommit()
+func (m *Map) Get(key interface{}) (val interface{}, ok bool) {
+	//m.init()
+	//m.tryCommit()
 
 	// Increment the state.
 	c := atomic.AddUint64(&m.state, 1)
 	//fmt.Printf("READ ")
 	s := m.aOrB(c)
 
-	// Search queue first, have to check.
-	//val, ok, deleted := searchView(s.view, key)
-	//if !ok && !deleted {
-	val, ok := s.values[key]
-	//}
+	if s.values != nil {
+		// Search queue first, have to check.
+		//var del bool
+		//val, ok, del = searchView(s.view, key)
+		//if !ok && !del {
+		val, ok = s.values[key]
+		//}
+	}
 
 	atomic.AddUint64(&s.count, 1)
 	return val, ok
 }
 
 func (m *Map) set(key, val interface{}, del bool) {
-	m.init()
+	//m.init()
+	m.tryCommit() // TODO: fix
 	m.queue.Set(entry{key: key, val: val, del: del})
-	m.tryCommit()
+	m.tryCommit() // TODO: fix
 }
 
 func (m *Map) Set(key, val interface{}) {
