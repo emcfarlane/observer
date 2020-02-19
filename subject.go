@@ -46,8 +46,8 @@ func (v *View) Next() *View {
 
 	// Wait for the next frame.
 	f.sub.mu.Lock()
-	var next *frame
-	for next = f.load(); next == nil; next = f.load() {
+	next := f.load()
+	for ; next == nil; next = f.load() {
 		f.sub.cond.Wait()
 	}
 	f.sub.mu.Unlock()
@@ -119,7 +119,7 @@ type Subject struct {
 	cond  sync.Cond
 	frame unsafe.Pointer
 
-	deadlock bool
+	deadlock bool // Skip lock on broadcast, can deadlock.
 }
 
 func (s *Subject) load() *frame {

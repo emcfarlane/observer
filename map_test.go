@@ -12,6 +12,7 @@ func TestMap(t *testing.T) {
 	//m.Set("one", "two")
 	//m.Set("3", "4")
 	//t.Fatal()
+	t.Logf("\n%s", m.String())
 
 	got, ok := m.Get(key)
 	t.Logf("%s %t", val, ok)
@@ -21,6 +22,7 @@ func TestMap(t *testing.T) {
 	if got.(string) != val {
 		t.Fatalf("expected %s, got %s", val, got)
 	}
+	t.Logf("\n%s", m.String())
 
 	val2 := "map"
 	m.Set(key, val2)
@@ -55,5 +57,5 @@ func TestMap(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
-	t.Log("\n" + m.String())
+	t.Logf("\n%s", m.String())
 }
