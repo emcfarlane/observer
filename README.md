@@ -1,6 +1,6 @@
 # observer
 
-[![GoDoc](https://godoc.org/github.com/afking/observer?status.svg)](https://godoc.org/github.com/afking/observer)
+[![GoDoc](https://godoc.org/github.com/emcfarlane/observer?status.svg)](https://godoc.org/github.com/emcfarlane/observer)
 
 Experimental package to broadcast events to multiple viewers for Go.
 Replaces a list of channels.

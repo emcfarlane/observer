@@ -1,4 +1,4 @@
-module github.com/afking/observer
+module github.com/emcfarlane/observer
 
 go 1.12
 
