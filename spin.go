@@ -15,6 +15,10 @@ func (s *spin) Lock() {
 	}
 }
 
+func (s *spin) GetLock() bool {
+	return atomic.CompareAndSwapUintptr(&s.lock, 0, 1)
+}
+
 func (s *spin) Unlock() {
 	atomic.StoreUintptr(&s.lock, 0)
 }

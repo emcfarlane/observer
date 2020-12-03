@@ -120,7 +120,9 @@ type testMap struct {
 	c *Map
 }
 
-func (m testMap) String() string { return m.c.String() }
+func (m testMap) String() string {
+	return "Map<TODO>"
+}
 
 func (m *testMap) Get(key []byte) ([]byte, error) {
 	v, ok := m.c.Get(string(key))
@@ -159,14 +161,6 @@ func runCacheBenchmark(b *testing.B, cache cache, keys [][]byte, pctWrites uint6
 	for i := 0; i < size; i++ {
 		_ = cache.Set(keys[i], []byte("data"))
 	}
-
-	if c, ok := cache.(*testMap); ok {
-		b.Logf("\n%s", c.c.String())
-	}
-	//var i int
-	//c.c.write
-
-	//b.Fatalf("written")
 
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {

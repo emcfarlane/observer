@@ -54,32 +54,17 @@ func (v *View) Next() *View {
 	return &next.views[0]
 }
 
-func (v *View) Range(fn func(val interface{}) bool) *View {
-	f := v.frame()
-	for i, j := v.index, f.last(); ; i, j = 0, f.last() {
-		var next *frame
-		if j == 63 {
-			next = f.load()
+// Len returns the current length.
+func (v *View) Len() int {
+	i := -int(v.index)
+	for f := v.frame(); f != nil; f = f.load() {
+		j := f.last() + 1
+		i += int(j)
+		if j != 64 {
+			break // skip load
 		}
-
-		// Ensure all values are set until latest.
-		want := ^uint64(0) >> (63 - j)
-		for atomic.LoadUint64(&f.mask)&want != want {
-			// Spin lock.
-			runtime.Gosched()
-		}
-
-		for ; i <= j; i++ {
-			if !fn(f.views[i].Value) {
-				return &f.views[i]
-			}
-		}
-
-		if next == nil {
-			return &f.views[j]
-		}
-		f = next
 	}
+	return i
 }
 
 type frame struct {
@@ -118,8 +103,6 @@ type Subject struct {
 	mu    sync.Mutex
 	cond  sync.Cond
 	frame unsafe.Pointer
-
-	deadlock bool // Skip lock on broadcast, can deadlock.
 }
 
 func (s *Subject) load() *frame {
@@ -185,10 +168,6 @@ func (s *Subject) Set(val interface{}) (v *View) {
 		v = f.set(uint8(i), val)
 	}
 
-	if s.deadlock {
-		s.cond.Broadcast()
-		return
-	}
 	s.mu.Lock()
 	s.cond.Broadcast()
 	s.mu.Unlock()

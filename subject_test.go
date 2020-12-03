@@ -49,17 +49,10 @@ func TestObserver(t *testing.T) {
 	//t.Logf("%+v", v.frame)
 	//t.Logf("%+v", v65.frame)
 
-	var i int
-	v65r := v.Range(func(val interface{}) bool {
-		i++
-		if i != val.(int) {
-			t.Fatalf("range %d, failed %v", i, v)
-			return false
-		}
-		return i < 66
-	})
-	if v65 != v65r {
-		t.Fatalf("%p %v != %p %v", v65, v65, v65r, v65r)
+	// Check length matches.
+	l := v.Len()
+	if v65.Value != l {
+		t.Fatalf("%p %v !=len(v) -> %v", v65, v65, l)
 	}
 }
 
