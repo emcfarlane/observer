@@ -8,25 +8,23 @@ import (
 )
 
 type entry struct {
-	key, val interface{} // TODO: []byte?
+	key, val interface{}
 	del      bool
 }
-
-//go:linkname goEFaceHash runtime.efaceHash
-func goEFaceHash(i interface{}, seed uintptr) uintptr
 
 type store struct {
 	sync.RWMutex
 	values map[interface{}]interface{}
-	view   *View
+	view   View
 }
 
-func (s *store) flush(to *View) {
+func (s *store) flush(n int) {
 	// Lock waits for all readers to leave.
 	s.Lock()
 	defer s.Unlock()
 
-	for s.view != to {
+	// Skip first value, already flushed to map.
+	for i := 0; i < n-1; i++ {
 		v := s.view.Next()
 
 		e := v.Value.(entry)
@@ -41,11 +39,11 @@ func (s *store) flush(to *View) {
 }
 
 type Map struct {
-	read atomic.Value
-
-	writeFlag spin
-	write     *store
+	read      atomic.Value
 	queue     Subject
+	writeFlag spin
+	writeDiff int
+	write     *store
 }
 
 func (m *Map) Get(key interface{}) (val interface{}, ok bool) {
@@ -91,8 +89,10 @@ func (m *Map) Get(key interface{}) (val interface{}, ok bool) {
 	}
 
 	if hasWrite {
-		m.write.flush(view)
+		n := m.writeDiff + l
+		m.write.flush(n)
 		m.read.Store(m.write)
+		m.writeDiff = l // write is now l behind read view.
 		m.write = read
 		m.writeFlag.Unlock()
 	}
@@ -100,7 +100,6 @@ func (m *Map) Get(key interface{}) (val interface{}, ok bool) {
 }
 
 func (m *Map) set(key, val interface{}, del bool) {
-	//hash := goEFaceHash(key, 0)
 	e := entry{key: key, val: val, del: del}
 
 	if !m.writeFlag.GetLock() {
@@ -135,10 +134,12 @@ func (m *Map) set(key, val interface{}, del bool) {
 	}
 
 	// Write up until the view.
-	m.write.flush(view)
+	n := m.write.view.Len()
+	m.write.flush(n)
 
 	read := m.read.Load().(*store)
 	m.read.Store(m.write)
+	m.writeDiff = n - m.writeDiff // write is now behind read view.
 	m.write = read
 	return
 }

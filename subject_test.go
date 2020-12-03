@@ -16,7 +16,7 @@ func TestObserver(t *testing.T) {
 
 	v2, v2n := s.Set(2), v.Next()
 	if v2 != v2n {
-		t.Fatalf("%p %v != %p %v", v2, v2, v2n, v2n)
+		t.Fatalf("%v != %v", v2, v2n)
 	}
 
 	var wg sync.WaitGroup
@@ -52,7 +52,7 @@ func TestObserver(t *testing.T) {
 	// Check length matches.
 	l := v.Len()
 	if v65.Value != l {
-		t.Fatalf("%p %v !=len(v) -> %v", v65, v65, l)
+		t.Fatalf("%v !=len(v) -> %v", v65, l)
 	}
 }
 

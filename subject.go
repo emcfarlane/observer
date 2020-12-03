@@ -10,25 +10,19 @@ import (
 
 // View is a value seen by the observer.
 type View struct {
+	frame *frame
 	Value interface{}
 	index uint8
 }
 
-func (v *View) frame() *frame {
-	// TODO: justify this...
-	return (*frame)(unsafe.Pointer(
-		uintptr(unsafe.Pointer(v)) - uintptr(v.index)*unsafe.Sizeof(*v)),
-	)
-}
-
 // Next returns the next view or blocks until a new value is set.
-func (v *View) Next() *View {
+func (v View) Next() View {
 	i := v.index + 1
-	f := v.frame()
+	f := v.frame
 
 	if i != 64 {
 		if f.has(i) {
-			return &f.views[i]
+			return f.index(i)
 		}
 
 		// Wait for the next view.
@@ -37,11 +31,11 @@ func (v *View) Next() *View {
 			f.sub.cond.Wait()
 		}
 		f.sub.mu.Unlock()
-		return &f.views[i]
+		return f.index(i)
 	}
 
 	if next := f.load(); next != nil {
-		return &next.views[0]
+		return next.index(0)
 	}
 
 	// Wait for the next frame.
@@ -51,13 +45,13 @@ func (v *View) Next() *View {
 		f.sub.cond.Wait()
 	}
 	f.sub.mu.Unlock()
-	return &next.views[0]
+	return next.index(0)
 }
 
 // Len returns the current length.
-func (v *View) Len() int {
+func (v View) Len() int {
 	i := -int(v.index)
-	for f := v.frame(); f != nil; f = f.load() {
+	for f := v.frame; f != nil; f = f.load() {
 		j := f.last() + 1
 		i += int(j)
 		if j != 64 {
@@ -68,7 +62,7 @@ func (v *View) Len() int {
 }
 
 type frame struct {
-	views [64]View
+	views [64]interface{}
 	mask  uint64
 	sub   *Subject
 	next  unsafe.Pointer
@@ -87,15 +81,20 @@ func (f *frame) last() uint8 {
 	return uint8(bits.Len64(atomic.LoadUint64(&f.mask)) - 1)
 }
 
-func (f *frame) set(i uint8, val interface{}) *View {
-	f.views[i].Value = val
-	f.views[i].index = i
+func (f *frame) set(i uint8, val interface{}) View {
+	f.views[i] = val
 	atomic.AddUint64(&f.mask, 1<<i)
-	return &f.views[i]
+	return View{frame: f, Value: val, index: i}
 }
 
-func (f *frame) latest() *View {
-	return &f.views[f.last()]
+func (f *frame) latest() View {
+	i := f.last()
+	return f.index(i)
+}
+
+func (f *frame) index(i uint8) View {
+	val := f.views[i]
+	return View{frame: f, Value: val, index: i}
 }
 
 // A Subject controls broadcasting events to multiple viewers.
@@ -111,7 +110,7 @@ func (s *Subject) load() *frame {
 
 // View returns the latest value for the subject.
 // Blocks if Set has not been called.
-func (s *Subject) View() *View {
+func (s *Subject) View() View {
 	f := s.load()
 	if f != nil {
 		return f.latest()
@@ -126,11 +125,11 @@ func (s *Subject) View() *View {
 		s.cond.Wait()
 	}
 	s.mu.Unlock()
-	return &f.views[0]
+	return f.index(0)
 }
 
 // Set the latest view to val and notify waiting viewers.
-func (s *Subject) Set(val interface{}) (v *View) {
+func (s *Subject) Set(val interface{}) (v View) {
 	f := s.load()
 	if f == nil {
 		s.mu.Lock()

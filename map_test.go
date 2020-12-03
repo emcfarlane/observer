@@ -14,6 +14,7 @@ func TestMap(t *testing.T) {
 	//t.Fatal()
 	//t.Logf("\n%s", m.String())
 
+	t.Log("Get", key)
 	got, ok := m.Get(key)
 	t.Logf("%s %t", val, ok)
 	if !ok {
@@ -25,7 +26,9 @@ func TestMap(t *testing.T) {
 	//t.Logf("\n%s", m.String())
 
 	val2 := "map"
+	t.Log("Set", key, val2)
 	m.Set(key, val2)
+	t.Log("Get", key)
 	got, ok = m.Get(key)
 	if got.(string) != val2 {
 		t.Fatalf("expected %s, got %s", val2, got)
