@@ -8,6 +8,7 @@ import (
 func TestMap(t *testing.T) {
 	m := Map{}
 	key, val := "hello", "world"
+	t.Log("Set", key, val)
 	m.Set(key, val)
 	//m.Set("one", "two")
 	//m.Set("3", "4")
@@ -37,6 +38,7 @@ func TestMap(t *testing.T) {
 		t.Fatalf("should be ok")
 	}
 
+	t.Log("Del", key)
 	m.Del(key)
 	got, ok = m.Get(key)
 	if got != nil {
@@ -47,6 +49,7 @@ func TestMap(t *testing.T) {
 	}
 
 	//t.Fatal()
+	t.Log("Map set/get loop")
 	wg := sync.WaitGroup{}
 	for i := 0; i < 100; i++ {
 		wg.Add(1)

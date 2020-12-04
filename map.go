@@ -2,9 +2,7 @@ package observer
 
 import (
 	"runtime"
-	"sync"
 	"sync/atomic"
-	_ "unsafe"
 )
 
 type entry struct {
@@ -13,18 +11,16 @@ type entry struct {
 }
 
 type store struct {
-	sync.RWMutex
+	count  uint64
 	values map[interface{}]interface{}
 	view   View
 }
 
-func (s *store) flush(n int) {
-	// Lock waits for all readers to leave.
-	s.Lock()
-	defer s.Unlock()
+func (s *store) flush() {
+	n := s.view.Len()
 
-	// Skip first value, already flushed to map.
-	for i := 0; i < n-1; i++ {
+	// Skip the first value, already flushed to map.
+	for i := 1; i < n; i++ {
 		v := s.view.Next()
 
 		e := v.Value.(entry)
@@ -38,23 +34,42 @@ func (s *store) flush(n int) {
 	}
 }
 
+func (s *store) loadCount() uint64 { return atomic.LoadUint64(&s.count) }
+
+const flagAorB uint64 = 1 << 63
+
 type Map struct {
-	read      atomic.Value
-	queue     Subject
-	writeFlag spin
-	writeDiff int
-	write     *store
+	init  uint32 // Required for setting up view
+	count uint64
+	a, b  store
+	queue Subject
+
+	writeFlag  spin
+	writeCount uint64
+}
+
+func (m *Map) read(x uint64) *store {
+	if x > flagAorB {
+		return &m.a
+	}
+	return &m.b
+}
+
+func (m *Map) write(x uint64) *store {
+	if x > flagAorB {
+		return &m.b
+	}
+	return &m.a
 }
 
 func (m *Map) Get(key interface{}) (val interface{}, ok bool) {
-	read, ok := m.read.Load().(*store)
-	if !ok {
-		// Failed to load store, happens on init.
+	if atomic.LoadUint32(&m.init) == 0 {
 		return nil, false
 	}
 
-	read.RLock()
-	defer read.RUnlock()
+	x := atomic.AddUint64(&m.count, 1)
+	read := m.read(x)
+	defer atomic.AddUint64(&read.count, 1)
 
 	val, ok = read.values[key]
 
@@ -64,19 +79,31 @@ func (m *Map) Get(key interface{}) (val interface{}, ok bool) {
 		return val, ok
 	}
 
-	hasWrite := m.writeFlag.GetLock()
+	if m.writeFlag.GetLock() {
+		write := m.write(x)
 
-	// Ensure we havn't been switched out during the read.
-	if hasWrite && m.write == read {
+		// Spin until all readers have left.
+		for wc := write.loadCount(); wc < m.writeCount; wc = write.loadCount() {
+			runtime.Gosched()
+		}
+
+		write.flush()
+		write.count = 0
+		val, ok = write.values[key]
+
+		// Switch A and B.
+		x = atomic.AddUint64(&m.count, flagAorB-m.writeCount)
+		m.writeCount = x & (^flagAorB)
+
 		m.writeFlag.Unlock()
-		hasWrite = false
+		return val, ok
 	}
 
-	view := read.view
-	for i := 0; i < l; i++ {
-		view = view.Next()
+	// Skip the first value, already in map.
+	for i, v := 1, read.view; i < l; i++ {
+		v = v.Next()
 
-		e := view.Value.(entry)
+		e := v.Value.(entry)
 		if e.key != key {
 			continue
 		}
@@ -87,15 +114,6 @@ func (m *Map) Get(key interface{}) (val interface{}, ok bool) {
 			val, ok = e.val, true
 		}
 	}
-
-	if hasWrite {
-		n := m.writeDiff + l
-		m.write.flush(n)
-		m.read.Store(m.write)
-		m.writeDiff = l // write is now l behind read view.
-		m.write = read
-		m.writeFlag.Unlock()
-	}
 	return val, ok
 }
 
@@ -103,8 +121,8 @@ func (m *Map) set(key, val interface{}, del bool) {
 	e := entry{key: key, val: val, del: del}
 
 	if !m.writeFlag.GetLock() {
-		// Init condition, spin on read map being created.
-		for read := m.read.Load(); read != nil; read = m.read.Load() {
+		// Spin until first view is set.
+		for d := atomic.LoadUint32(&m.init); d == 0; d = atomic.LoadUint32(&m.init) {
 			runtime.Gosched()
 		}
 
@@ -113,35 +131,40 @@ func (m *Map) set(key, val interface{}, del bool) {
 	}
 	defer m.writeFlag.Unlock()
 
-	view := m.queue.Set(e)
+	x := atomic.LoadUint64(&m.count)
+	write := m.write(x)
 
 	// Init condition, create read & write maps for the first value.
-	if m.write == nil {
-		m.write = &store{
-			values: make(map[interface{}]interface{}),
-			view:   view,
-		}
-		read := &store{
-			values: make(map[interface{}]interface{}),
-			view:   view,
-		}
+	view := m.queue.Set(e)
+	if atomic.LoadUint32(&m.init) == 0 {
+		write.values = make(map[interface{}]interface{})
+		write.view = view
+
+		read := m.read(x)
+		read.values = make(map[interface{}]interface{})
+		read.view = view
+
 		if !del {
-			m.write.values[key] = val
+			write.values[key] = val
 			read.values[key] = val
 		}
-		m.read.Store(read)
+
+		atomic.StoreUint32(&m.init, 1)
 		return
 	}
 
-	// Write up until the view.
-	n := m.write.view.Len()
-	m.write.flush(n)
+	// Spin until all readers have left.
+	for wc := write.loadCount(); wc < m.writeCount; wc = write.loadCount() {
+		runtime.Gosched()
+	}
 
-	read := m.read.Load().(*store)
-	m.read.Store(m.write)
-	m.writeDiff = n - m.writeDiff // write is now behind read view.
-	m.write = read
-	return
+	// Write as many elements as possible.
+	write.flush()
+	write.count = 0
+
+	// Switch A and B.
+	x = atomic.AddUint64(&m.count, flagAorB-m.writeCount)
+	m.writeCount = x & (^flagAorB)
 }
 
 func (m *Map) Set(key, val interface{}) { m.set(key, val, false) }

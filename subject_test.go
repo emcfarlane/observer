@@ -54,6 +54,14 @@ func TestObserver(t *testing.T) {
 	if v65.Value != l {
 		t.Fatalf("%v !=len(v) -> %v", v65, l)
 	}
+
+	for i := 0; i < 1000; i++ {
+		s.Set(66 + i)
+		l = v.Len()
+		if l != 66+i {
+			t.Fatalf("Got %v want %v for len", l, 66+i)
+		}
+	}
 }
 
 var cases = []int{1, 8, 32}

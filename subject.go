@@ -19,6 +19,9 @@ type View struct {
 func (v View) Next() View {
 	i := v.index + 1
 	f := v.frame
+	if f == nil {
+		panic("View is not initialised")
+	}
 
 	if i != 64 {
 		if f.has(i) {
@@ -50,6 +53,10 @@ func (v View) Next() View {
 
 // Len returns the current length.
 func (v View) Len() int {
+	if v.frame == nil {
+		panic("View is not initialised")
+	}
+
 	i := -int(v.index)
 	for f := v.frame; f != nil; f = f.load() {
 		j := f.last() + 1
