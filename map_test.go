@@ -32,6 +32,7 @@ func TestMap(t *testing.T) {
 	t.Log("Get", key)
 	got, ok = m.Get(key)
 	if got.(string) != val2 {
+		//t.Log(m.a.values, m.b.values, m.writeEntry)
 		t.Fatalf("expected %s, got %s", val2, got)
 	}
 	if !ok {

@@ -114,6 +114,37 @@ func newSyncMap() *syncMap {
 	return &syncMap{new(sync.Map)}
 }
 
+type rwMap struct {
+	mu sync.RWMutex
+	m  map[string][]byte
+}
+
+func (m *rwMap) Get(key []byte) ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	val, ok := m.m[string(key)]
+	if !ok {
+		return nil, errKeyNotFound
+	}
+	return val, nil
+}
+
+func (m *rwMap) Set(key, value []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.m == nil {
+		m.m = make(map[string][]byte)
+	}
+	m.m[string(key)] = value
+	return nil
+}
+
+func newRWMap() *rwMap {
+	return &rwMap{}
+}
+
 // test Map
 type testMap struct {
 	c *Map
@@ -196,6 +227,7 @@ func BenchmarkCaches(b *testing.B) {
 		//{"BigCacheZipfRead", newBigCache(b.N), zipfList, 0},
 		{"MapZipfRead", newMap(), zipfList, 0},
 		{"SyncMapZipfRead", newSyncMap(), zipfList, 0},
+		{"RWMapZipfRead", newRWMap(), zipfList, 0},
 
 		//{"BigCacheOneKeyRead", newBigCache(b.N), oneList, 0},
 		{"MapOneKeyRead", newMap(), oneList, 0},
@@ -211,7 +243,8 @@ func BenchmarkCaches(b *testing.B) {
 
 		//{"BigCacheZipfMixed", newBigCache(b.N), zipfList, 25},
 		{"MapZipfMixed", newMap(), zipfList, 25},
-		//{"SyncMapZipfMixed", newSyncMap(), zipfList, 25},
+		{"SyncMapZipfMixed", newSyncMap(), zipfList, 25},
+		{"RWMapZipfMixed", newRWMap(), zipfList, 25},
 
 		//{"BigCacheOneKeyMixed", newBigCache(b.N), oneList, 25},
 		{"MapOneKeyMixed", newMap(), oneList, 25},
