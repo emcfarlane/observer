@@ -20,7 +20,6 @@ package observer
 
 import (
 	"errors"
-	"fmt"
 	"math/rand"
 	"strconv"
 	"sync"
@@ -120,9 +119,9 @@ type testMap struct {
 	c *Map
 }
 
-func (m testMap) String() string {
-	return "Map<TODO>"
-}
+//func (m testMap) String() string {
+//	return "Map<TODO>"
+//}
 
 func (m *testMap) Get(key []byte) ([]byte, error) {
 	v, ok := m.c.Get(string(key))
@@ -146,7 +145,6 @@ func (m *testMap) Set(key, value []byte) error {
 }
 
 func newMap() *testMap {
-	fmt.Println("NEW MAP")
 	return &testMap{new(Map)}
 }
 
@@ -179,12 +177,12 @@ func runCacheBenchmark(b *testing.B, cache cache, keys [][]byte, pctWrites uint6
 			}
 		}
 	})
-	b.Logf("\n" + fmt.Sprint(cache))
+	//b.Logf("\n" + fmt.Sprint(cache))
 }
 
 func BenchmarkCaches(b *testing.B) {
 	zipfList := zipfKeyList()
-	//oneList := oneKeyList()
+	oneList := oneKeyList()
 
 	// two datasets (zipf, onekey)
 	// 3 caches (bigcache, freecache, sync.Map)
@@ -200,31 +198,32 @@ func BenchmarkCaches(b *testing.B) {
 		{"SyncMapZipfRead", newSyncMap(), zipfList, 0},
 
 		//{"BigCacheOneKeyRead", newBigCache(b.N), oneList, 0},
-		//{"MapOneKeyRead", newMap(), oneList, 0},
-		//{"SyncMapOneKeyRead", newSyncMap(), oneList, 0},
+		{"MapOneKeyRead", newMap(), oneList, 0},
+		{"SyncMapOneKeyRead", newSyncMap(), oneList, 0},
 
 		//{"BigCacheZipfWrite", newBigCache(b.N), zipfList, 100},
-		//{"SyncMapZipfWrite", newSyncMap(), zipfList, 100},
+		{"MapZipIfWrite", newMap(), oneList, 100},
+		{"SyncMapZipfWrite", newSyncMap(), zipfList, 100},
 
 		//{"BigCacheOneKeyWrite", newBigCache(b.N), oneList, 100},
-		//{"SyncMapOneKeyWrite", newSyncMap(), oneList, 100},
+		{"MapOneIfWrite", newMap(), oneList, 100},
+		{"SyncMapOneKeyWrite", newSyncMap(), oneList, 100},
 
 		//{"BigCacheZipfMixed", newBigCache(b.N), zipfList, 25},
-		//{"MapZipfMixed", newMap(), zipfList, 25},
+		{"MapZipfMixed", newMap(), zipfList, 25},
 		//{"SyncMapZipfMixed", newSyncMap(), zipfList, 25},
 
 		//{"BigCacheOneKeyMixed", newBigCache(b.N), oneList, 25},
-		//{"MapOneKeyMixed", newMap(), oneList, 25},
-		//{"SyncMapOneKeyMixed", newSyncMap(), oneList, 25},
+		{"MapOneKeyMixed", newMap(), oneList, 25},
+		{"SyncMapOneKeyMixed", newSyncMap(), oneList, 25},
 	}
 
 	for _, bm := range benchmarks {
 		b.Run(bm.name, func(b *testing.B) {
 			runCacheBenchmark(b, bm.cache, bm.keys, bm.pctWrites)
 		})
-		//b.Logf("--- CACHE ---\n" + fmt.Sprint(bm.cache))
-		if s, ok := bm.cache.(fmt.Stringer); ok {
-			fmt.Println("--- CACHE ---\n" + s.String() + "\n--- ^^^^^ ---")
-		}
+		//if s, ok := bm.cache.(fmt.Stringer); ok {
+		//	fmt.Println("--- CACHE ---\n" + s.String() + "\n--- ^^^^^ ---")
+		//}
 	}
 }
