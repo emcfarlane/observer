@@ -76,31 +76,39 @@ key: Map is this Map, SyncMap is `sync.Map` and RWMap is a Go map with a `sync.M
 
 ```
 BenchmarkCaches/MapZipfRead
-BenchmarkCaches/MapZipfRead-8           25119784                51.05 ns/op            0 B/op          0 allocs/op
+BenchmarkCaches/MapZipfRead-8           21317090                54.80 ns/op            0 B/op          0 allocs/op
 BenchmarkCaches/SyncMapZipfRead
-BenchmarkCaches/SyncMapZipfRead-8       23019645                52.35 ns/op            0 B/op          0 allocs/op
+BenchmarkCaches/SyncMapZipfRead-8       22807447                54.58 ns/op            0 B/op          0 allocs/op
 BenchmarkCaches/RWMapZipfRead
-BenchmarkCaches/RWMapZipfRead-8         27033931                45.05 ns/op            0 B/op          0 allocs/op
+BenchmarkCaches/RWMapZipfRead-8         27089253                45.28 ns/op            0 B/op          0 allocs/op
 BenchmarkCaches/MapOneKeyRead
-BenchmarkCaches/MapOneKeyRead-8         35277840                35.37 ns/op            0 B/op          0 allocs/op
+BenchmarkCaches/MapOneKeyRead-8         31896468                38.77 ns/op            0 B/op          0 allocs/op
 BenchmarkCaches/SyncMapOneKeyRead
-BenchmarkCaches/SyncMapOneKeyRead-8     100000000               11.14 ns/op            0 B/op          0 allocs/op
+BenchmarkCaches/SyncMapOneKeyRead-8     100000000               10.91 ns/op            0 B/op          0 allocs/op
+BenchmarkCaches/RWMapOneKeyRead
+BenchmarkCaches/RWMapOneKeyRead-8       28684920                41.93 ns/op            0 B/op          0 allocs/op
 BenchmarkCaches/MapZipIfWrite
-BenchmarkCaches/MapZipIfWrite-8          2615496               458.9 ns/op            56 B/op          4 allocs/op
+BenchmarkCaches/MapZipIfWrite-8          2000820               610.6 ns/op            55 B/op          3 allocs/op
 BenchmarkCaches/SyncMapZipfWrite
-BenchmarkCaches/SyncMapZipfWrite-8       2199801               547.9 ns/op            71 B/op          5 allocs/op
+BenchmarkCaches/SyncMapZipfWrite-8       2193643               550.7 ns/op            71 B/op          5 allocs/op
+BenchmarkCaches/RWMapZipfWrite
+BenchmarkCaches/RWMapZipfWrite-8         4045146               298.6 ns/op            15 B/op          1 allocs/op
 BenchmarkCaches/MapOneIfWrite
-BenchmarkCaches/MapOneIfWrite-8          2646877               446.9 ns/op            56 B/op          4 allocs/op
+BenchmarkCaches/MapOneIfWrite-8          2679439               446.5 ns/op            56 B/op          4 allocs/op
 BenchmarkCaches/SyncMapOneKeyWrite
-BenchmarkCaches/SyncMapOneKeyWrite-8     3882291               307.8 ns/op            72 B/op          5 allocs/op
+BenchmarkCaches/SyncMapOneKeyWrite-8     3835924               312.0 ns/op            72 B/op          5 allocs/op
+BenchmarkCaches/RWMapOneKeyWrite
+BenchmarkCaches/RWMapOneKeyWrite-8       5000916               240.5 ns/op            16 B/op          2 allocs/op
 BenchmarkCaches/MapZipfMixed
-BenchmarkCaches/MapZipfMixed-8          16612470                68.57 ns/op            2 B/op          0 allocs/op
+BenchmarkCaches/MapZipfMixed-8          16913481                68.68 ns/op            2 B/op          0 allocs/op
 BenchmarkCaches/SyncMapZipfMixed
-BenchmarkCaches/SyncMapZipfMixed-8      20458893                60.46 ns/op           13 B/op          0 allocs/op
+BenchmarkCaches/SyncMapZipfMixed-8      19314884                58.52 ns/op           14 B/op          0 allocs/op
 BenchmarkCaches/RWMapZipfMixed
-BenchmarkCaches/RWMapZipfMixed-8         2817824               441.3 ns/op             1 B/op          0 allocs/op
+BenchmarkCaches/RWMapZipfMixed-8         2572059               443.6 ns/op             1 B/op          0 allocs/op
 BenchmarkCaches/MapOneKeyMixed
-BenchmarkCaches/MapOneKeyMixed-8        28267887                42.63 ns/op            2 B/op          0 allocs/op
+BenchmarkCaches/MapOneKeyMixed-8        26252911                45.45 ns/op            2 B/op          0 allocs/op
 BenchmarkCaches/SyncMapOneKeyMixed
-BenchmarkCaches/SyncMapOneKeyMixed-8    66958126                17.83 ns/op            6 B/op          0 allocs/op
+BenchmarkCaches/SyncMapOneKeyMixed-8    64579701                18.14 ns/op            6 B/op          0 allocs/op
+BenchmarkCaches/RWMapOneKeyMixed
+BenchmarkCaches/RWMapOneKeyMixed-8       8419248               141.7 ns/op             0 B/op          0 allocs/op
 ```

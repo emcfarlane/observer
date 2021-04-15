@@ -216,7 +216,7 @@ func BenchmarkCaches(b *testing.B) {
 	oneList := oneKeyList()
 
 	// two datasets (zipf, onekey)
-	// 3 caches (bigcache, freecache, sync.Map)
+	// 3 caches (observer.Map, sync.Map, sync.Mutex)
 	// 3 types of benchmark (read, write, mixed)
 	benchmarks := []struct {
 		name      string
@@ -232,14 +232,17 @@ func BenchmarkCaches(b *testing.B) {
 		//{"BigCacheOneKeyRead", newBigCache(b.N), oneList, 0},
 		{"MapOneKeyRead", newMap(), oneList, 0},
 		{"SyncMapOneKeyRead", newSyncMap(), oneList, 0},
+		{"RWMapOneKeyRead", newRWMap(), oneList, 0},
 
 		//{"BigCacheZipfWrite", newBigCache(b.N), zipfList, 100},
-		{"MapZipIfWrite", newMap(), oneList, 100},
+		{"MapZipIfWrite", newMap(), zipfList, 100},
 		{"SyncMapZipfWrite", newSyncMap(), zipfList, 100},
+		{"RWMapZipfWrite", newRWMap(), zipfList, 100},
 
 		//{"BigCacheOneKeyWrite", newBigCache(b.N), oneList, 100},
 		{"MapOneIfWrite", newMap(), oneList, 100},
 		{"SyncMapOneKeyWrite", newSyncMap(), oneList, 100},
+		{"RWMapOneKeyWrite", newRWMap(), oneList, 100},
 
 		//{"BigCacheZipfMixed", newBigCache(b.N), zipfList, 25},
 		{"MapZipfMixed", newMap(), zipfList, 25},
@@ -249,6 +252,7 @@ func BenchmarkCaches(b *testing.B) {
 		//{"BigCacheOneKeyMixed", newBigCache(b.N), oneList, 25},
 		{"MapOneKeyMixed", newMap(), oneList, 25},
 		{"SyncMapOneKeyMixed", newSyncMap(), oneList, 25},
+		{"RWMapOneKeyMixed", newRWMap(), oneList, 25},
 	}
 
 	for _, bm := range benchmarks {
