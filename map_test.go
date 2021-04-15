@@ -66,3 +66,30 @@ func TestMap(t *testing.T) {
 	wg.Wait()
 	//t.Logf("\n%s", m.String())
 }
+
+func TestMapTx(t *testing.T) {
+	m := Map{}
+
+	key, val := "counter", 2
+	m.Set(key, val)
+	m.Tx(key, func(mval interface{}, ok bool) (interface{}, bool) {
+		if !ok {
+			t.Fatal("not valid", mval, ok)
+		}
+
+		n := mval.(int)
+		if val != mval {
+			t.Fatal("invalid val", n)
+		}
+		return n + 1, ok
+	})
+
+	mval, ok := m.Get(key)
+	if !ok {
+		t.Fatal("not valid")
+	}
+	n := mval.(int)
+	if n != val+1 {
+		t.Fatal("invalid value", n)
+	}
+}
