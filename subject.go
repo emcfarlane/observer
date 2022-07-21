@@ -8,15 +8,17 @@ import (
 	"unsafe"
 )
 
+func (v View[T]) Value() T { return v.value }
+
 // View is a value seen by the observer.
-type View struct {
-	frame *frame
-	Value interface{}
+type View[T any] struct {
+	frame *frame[T]
+	value T
 	index uint8
 }
 
 // Next returns the next view or blocks until a new value is set.
-func (v View) Next() View {
+func (v View[T]) Next() View[T] {
 	i := v.index + 1
 	f := v.frame
 	if f == nil {
@@ -52,7 +54,7 @@ func (v View) Next() View {
 }
 
 // Len returns the current length.
-func (v View) Len() int {
+func (v View[T]) Len() int {
 	i := -int(v.index)
 	for f := v.frame; f != nil; f = f.load() {
 		j := f.last() + 1
@@ -64,56 +66,56 @@ func (v View) Len() int {
 	return i
 }
 
-type frame struct {
-	views [64]interface{}
+type frame[T any] struct {
+	views [64]T
 	mask  uint64
-	sub   *Subject
+	sub   *Subject[T]
 	next  unsafe.Pointer
 	count uint32
 }
 
-func (f *frame) load() *frame {
-	return (*frame)(atomic.LoadPointer(&f.next))
+func (f *frame[T]) load() *frame[T] {
+	return (*frame[T])(atomic.LoadPointer(&f.next))
 }
 
-func (f *frame) has(i uint8) bool {
+func (f *frame[T]) has(i uint8) bool {
 	return atomic.LoadUint64(&f.mask)&(1<<i) != 0
 }
 
-func (f *frame) last() uint8 {
+func (f *frame[T]) last() uint8 {
 	return uint8(bits.Len64(atomic.LoadUint64(&f.mask)) - 1)
 }
 
-func (f *frame) set(i uint8, val interface{}) View {
+func (f *frame[T]) set(i uint8, val T) View[T] {
 	f.views[i] = val
 	atomic.AddUint64(&f.mask, 1<<i)
-	return View{frame: f, Value: val, index: i}
+	return View[T]{frame: f, value: val, index: i}
 }
 
-func (f *frame) latest() View {
+func (f *frame[T]) latest() View[T] {
 	i := f.last()
 	return f.index(i)
 }
 
-func (f *frame) index(i uint8) View {
+func (f *frame[T]) index(i uint8) View[T] {
 	val := f.views[i]
-	return View{frame: f, Value: val, index: i}
+	return View[T]{frame: f, value: val, index: i}
 }
 
 // A Subject controls broadcasting events to multiple viewers.
-type Subject struct {
+type Subject[T any] struct {
 	mu    sync.Mutex
 	cond  sync.Cond
 	frame unsafe.Pointer
 }
 
-func (s *Subject) load() *frame {
-	return (*frame)(atomic.LoadPointer(&s.frame))
+func (s *Subject[T]) load() *frame[T] {
+	return (*frame[T])(atomic.LoadPointer(&s.frame))
 }
 
 // View returns the latest value for the subject.
 // Blocks if Set has not been called.
-func (s *Subject) View() View {
+func (s *Subject[T]) View() View[T] {
 	f := s.load()
 	if f != nil {
 		return f.latest()
@@ -132,7 +134,7 @@ func (s *Subject) View() View {
 }
 
 // Set the latest view to val and notify waiting viewers.
-func (s *Subject) Set(val interface{}) (v View) {
+func (s *Subject[T]) Set(val T) (v View[T]) {
 	f := s.load()
 	if f == nil {
 		s.mu.Lock()
@@ -140,7 +142,7 @@ func (s *Subject) Set(val interface{}) (v View) {
 			s.cond.L = &s.mu
 		}
 		if f = s.load(); f == nil {
-			f = &frame{sub: s}
+			f = &frame[T]{sub: s}
 			v = f.set(0, val)
 
 			atomic.StorePointer(&s.frame, unsafe.Pointer(f))
@@ -162,7 +164,7 @@ func (s *Subject) Set(val interface{}) (v View) {
 	}
 
 	if i == 64 {
-		next := &frame{sub: s}
+		next := &frame[T]{sub: s}
 		v = next.set(0, val)
 		atomic.StorePointer(&f.next, unsafe.Pointer(next))
 		atomic.StorePointer(&s.frame, unsafe.Pointer(next))

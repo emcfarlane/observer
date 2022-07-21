@@ -7,10 +7,10 @@ import (
 )
 
 func TestObserver(t *testing.T) {
-	var s Subject
+	var s Subject[int]
 	v := s.Set(1)
 
-	if v.Value.(int) != 1 {
+	if v.Value() != 1 {
 		t.Fatal("required", 1)
 	}
 
@@ -25,7 +25,7 @@ func TestObserver(t *testing.T) {
 		i := i
 		wg.Add(1)
 		go func() {
-			threes[i] = v2.Next().Value.(int)
+			threes[i] = v2.Next().Value()
 			wg.Done()
 		}()
 	}
@@ -43,7 +43,7 @@ func TestObserver(t *testing.T) {
 	}
 
 	v65 := s.View()
-	if v65.Value.(int) != 65 {
+	if v65.Value() != 65 {
 		t.Fatal("required", 65)
 	}
 	//t.Logf("%+v", v.frame)
@@ -51,7 +51,7 @@ func TestObserver(t *testing.T) {
 
 	// Check length matches.
 	l := v.Len()
-	if v65.Value != l {
+	if v65.Value() != l {
 		t.Fatalf("%v !=len(v) -> %v", v65, l)
 	}
 
@@ -69,7 +69,7 @@ var cases = []int{1, 8, 32}
 func BenchmarkObserver(b *testing.B) {
 	for _, i := range cases {
 		b.Run(strconv.Itoa(i), func(b *testing.B) {
-			s := &Subject{}
+			s := &Subject[int]{}
 			s.Set(0)
 			var wg sync.WaitGroup
 			for w := 0; w < i; w++ {
@@ -79,7 +79,7 @@ func BenchmarkObserver(b *testing.B) {
 					var sum int
 					for sum < b.N {
 						v = v.Next()
-						sum += v.Value.(int)
+						sum += v.Value()
 					}
 					wg.Done()
 				}()

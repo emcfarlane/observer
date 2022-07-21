@@ -4,21 +4,21 @@
 
 Experimental concurrency primatives!
 
-## Subject
+## Subject[T]
 
-Subject is an unbounded concurrent observer.
+Subject is a generic unbounded concurrent observer.
 It's based on an atomic counter per fixed length array. Adding elements increments 
 the counter to select the insert position. If the counter is greater than the 
 list size a new array is allocated and the process is repeated for the new array.
 Readers hold a pointer to a position in the array. Replaces a list of channels.
 
 ```
-var s observer.Subject
+var s observer.Subject[string]
 go s.Set("hello")
 
 go func() {
 	for v := s.View(); ; v = v.Next() {
-		fmt.Println(v.Value)
+		fmt.Println(v.Value())
 	}
 }()
 ```
@@ -30,12 +30,12 @@ Faster than a single channel and cost is linear when increase the number of read
 Trade off is in the queue becoming unbounded.
 
 ```
-BenchmarkObserver/1-8           29919490                38.8 ns/op            28 B/op          0 allocs/op
-BenchmarkObserver/8-8           18135234                74.1 ns/op            28 B/op          0 allocs/op
-BenchmarkObserver/32-8           9482469               129 ns/op              28 B/op          0 allocs/op
-BenchmarkChannel/1-8            20000000                74.2 ns/op             0 B/op          0 allocs/op
-BenchmarkChannel/8-8             1000000              1353 ns/op               0 B/op          0 allocs/op
-BenchmarkChannel/32-8             200000              6261 ns/op               0 B/op          0 allocs/op
+BenchmarkObserver/1-8    35960995  34.22 ns/op  9 B/op  0 allocs/op
+BenchmarkObserver/8-8     7084509  145.5 ns/op  9 B/op  0 allocs/op
+BenchmarkObserver/32-8   14361388  94.58 ns/op  9 B/op  0 allocs/op
+BenchmarkChannel/1-8     20000000   74.2 ns/op  0 B/op  0 allocs/op
+BenchmarkChannel/8-8      1000000   1353 ns/op  0 B/op  0 allocs/op
+BenchmarkChannel/32-8      200000   6261 ns/op  0 B/op  0 allocs/op
 ```
 
 ##  Map
