@@ -222,10 +222,9 @@ func (c *Channel[T]) Len() int {
 	i = -i
 	for ; t != nil; t = t.load() {
 		j := t.last()
-
 		i += int(j)
-		if j != 64 {
-			break // skip load
+		if j != 63 {
+			break // skip last load
 		}
 	}
 	if i < 0 {
